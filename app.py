@@ -49,7 +49,7 @@ def load_all_data():
         
         # Check if we have valid credentials
         if credentials['aws_access_key_id'] and credentials['aws_secret_access_key']:
-            st.info("🔄 Loading data from AWS S3...")
+            # st.info("🔄 Loading data from AWS S3...")
             
             # Create S3 client with credentials
             s3 = boto3.client(
@@ -265,19 +265,19 @@ def main():
         # Team Member 1
         st.markdown("""
         **🧑‍💻 Uzair Hussain**  
-            [See Profile](https://linkedin.com/in/uzairhussain1)            
+            [See Profile](https://www.linkedin.com/in/uzairhussain1)            
         """)
         
         # Team Member 2
         st.markdown("""
         **👩‍💻 Abdul Lahad**  
-            [See Profile](https://linkedin.com/in/member2-profile)
+            [See Profile](https://www.linkedin.com/in/abdul-lahad-8226ab274/)
         """)
         
         # Team Member 3
         st.markdown("""
         **🧑‍💼 Syed Bilal Majid**  
-            [See Profile](https://linkedin.com/in/member3-profile)
+            [See Profile](https://www.linkedin.com/in/bilal-majid-37b56225a/)
         """)
         
 
