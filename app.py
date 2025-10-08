@@ -52,13 +52,13 @@ def load_all_data():
             st.info("🔄 Loading data from AWS S3...")
             
             # Create S3 client with credentials
-            # s3 = boto3.client(
-            #     's3',
-            #     aws_access_key_id=credentials['aws_access_key_id'],
-            #     aws_secret_access_key=credentials['aws_secret_access_key'],
-            #     region_name=credentials['region_name']
-            # )
-            s3 = boto3.client('s3')
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=credentials['aws_access_key_id'],
+                aws_secret_access_key=credentials['aws_secret_access_key'],
+                region_name=credentials['region_name']
+            )
+            # s3 = boto3.client('s3')
             bucket_name = "hackathon-project-data"
 
             # Excel file
