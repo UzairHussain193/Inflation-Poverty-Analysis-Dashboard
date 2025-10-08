@@ -1,1 +1,4 @@
 data/wfp_food_prices_database.csv
+.env
+secrets.toml
+data/hackathon-user_accessKeys.csv

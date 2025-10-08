@@ -6,6 +6,32 @@ import plotly.express as px
 import plotly.graph_objects as go
 import seaborn as sns
 from datetime import datetime
+import boto3
+from io import BytesIO, StringIO
+from dotenv import load_dotenv
+import os
+
+
+# Load AWS Credentials
+load_dotenv()
+
+def get_aws_credentials():
+    """Get AWS credentials from environment or Streamlit secrets"""
+    try:
+        if hasattr(st, 'secrets') and 'aws' in st.secrets:
+            return {
+                'aws_access_key_id': st.secrets.aws.AWS_ACCESS_KEY_ID,
+                'aws_secret_access_key': st.secrets.aws.AWS_SECRET_ACCESS_KEY,
+                'region_name': st.secrets.aws.AWS_DEFAULT_REGION
+            }
+    except:
+        pass
+    
+    return {
+        'aws_access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
+        'aws_secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
+        'region_name': os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
+    }
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
@@ -15,93 +41,73 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==================== CUSTOM CSS ====================
-# st.markdown("""
-# <style>
-#     /* Main theme colors - SDG inspired */
-#     :root {
-#         --primary-color: #E5243B;  /* SDG 1 Red */
-#         --secondary-color: #DDA63A; /* SDG 2 Yellow */
-#         --success-color: #4C9F38;
-#         --info-color: #00689D;
-#     }
-    
-#     /* Metric cards styling */
-#     [data-testid="stMetricValue"] {
-#         font-size: 28px;
-#         font-weight: bold;
-#     }
-    
-#     /* Tab styling */
-#     .stTabs [data-baseweb="tab-list"] {
-#         gap: 8px;
-#     }
-    
-#     .stTabs [data-baseweb="tab"] {
-#         height: 50px;
-#         padding: 10px 20px;
-#         background-color: #f0f2f6;
-#         border-radius: 5px;
-#     }
-    
-#     .stTabs [aria-selected="true"] {
-#         background-color: #E5243B;
-#         color: white;
-#     }
-    
-#     /* Headers */
-#     h1 {
-#         color: #E5243B;
-#         padding-bottom: 10px;
-#         border-bottom: 3px solid #DDA63A;
-#     }
-    
-#     h2 {
-#         color: #2c3e50;
-#         margin-top: 20px;
-#     }
-    
-#     h3 {
-#         color: #34495e;
-#     }
-    
-#     /* Info boxes */
-#     .info-box {
-#         padding: 20px;
-#         border-radius: 10px;
-#         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-#         color: white;
-#         margin: 10px 0;
-#     }
-    
-#     /* Sidebar styling */
-#     [data-testid="stSidebar"] {
-#         background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
-#     }
-# </style>
-# """, unsafe_allow_html=True)
-
-# ==================== DATA LOADING & CACHING ====================
-# FIX 1: Using @st.cache_data instead of redundant load_df() calls
+# == Cloud Data Loading ==
 @st.cache_data
 def load_all_data():
-    """Load all datasets once and cache them - FIXES redundant data loading"""
     try:
-        # Load Excel sheets
-        region = pd.read_excel("data/population-data.xlsx", sheet_name="region")
-        yearly = pd.read_excel("data/population-data.xlsx", sheet_name="yearly")
-        und = pd.read_excel("data/population-data.xlsx", sheet_name='undernourishment')
-        life = pd.read_excel("data/population-data.xlsx", sheet_name='life-expectancy')
-        country = pd.read_excel("data/population-data.xlsx", sheet_name="country-wise")
+        credentials = get_aws_credentials()
         
-        # Load CSV files
-        income = pd.read_csv("data/income-data.csv")
-        food = pd.read_csv("data/wfp_food_prices_database.csv")
-        
+        # Check if we have valid credentials
+        if credentials['aws_access_key_id'] and credentials['aws_secret_access_key']:
+            st.info("🔄 Loading data from AWS S3...")
+            
+            # Create S3 client with credentials
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=credentials['aws_access_key_id'],
+                aws_secret_access_key=credentials['aws_secret_access_key'],
+                region_name=credentials['region_name']
+            )
+            s3 = boto3.client('s3')
+            bucket_name = "hackathon-project-data"
+
+            # Excel file
+            excel_obj = s3.get_object(Bucket=bucket_name, Key="population-data.xlsx")
+            excel_bytes = excel_obj['Body'].read()
+            excel_file = BytesIO(excel_bytes)
+
+            region = pd.read_excel(excel_file, sheet_name="region")
+            yearly = pd.read_excel(excel_file, sheet_name="yearly")
+            und = pd.read_excel(excel_file, sheet_name="undernourishment")
+            life = pd.read_excel(excel_file, sheet_name="life-expectancy")
+            country = pd.read_excel(excel_file, sheet_name="country-wise")
+
+            # CSV files
+            income_obj = s3.get_object(Bucket=bucket_name, Key="income-data.csv")
+            food_obj = s3.get_object(Bucket=bucket_name, Key="wfp_food_prices_database.csv")
+
+            income = pd.read_csv(StringIO(income_obj['Body'].read().decode('utf-8')))
+            food = pd.read_csv(StringIO(food_obj['Body'].read().decode('utf-8')))
+
         return food, region, yearly, und, life, country, income
+
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None, None, None, None, None, None, None
+
+
+
+# ==================== DATA LOADING & CACHING ====================
+# FIX 1: Using @st.cache_data instead of redundant load_df() calls
+# @st.cache_data
+# def load_all_data():
+#     """Load all datasets once and cache them - FIXES redundant data loading"""
+#     try:
+#         # Load Excel sheets
+#         region = pd.read_excel("data/population-data.xlsx", sheet_name="region")
+#         yearly = pd.read_excel("data/population-data.xlsx", sheet_name="yearly")
+#         und = pd.read_excel("data/population-data.xlsx", sheet_name='undernourishment')
+#         life = pd.read_excel("data/population-data.xlsx", sheet_name='life-expectancy')
+#         country = pd.read_excel("data/population-data.xlsx", sheet_name="country-wise")
+        
+#         # Load CSV files
+#         income = pd.read_csv("data/income-data.csv")
+#         food = pd.read_csv("data/wfp_food_prices_database.csv")
+        
+#         return food, region, yearly, und, life, country, income
+#     except Exception as e:
+#         st.error(f"Error loading data: {e}")
+#         return None, None, None, None, None, None, None
 
 # ==================== UTILITY FUNCTIONS ====================
 def clean_percent_col(s):
@@ -199,13 +205,14 @@ def main():
     
     # ==================== SIDEBAR ====================
     with st.sidebar:
-        st.image("https://img.freepik.com/free-vector/deer-care-icon-logo-design_474888-2791.jpg?semt=ais_hybrid&w=740&q=80", use_container_width=True)
+        # st.image("https://img.freepik.com/free-vector/deer-care-icon-logo-design_474888-2791.jpg?semt=ais_hybrid&w=740&q=80", use_container_width=True)
+        st.image("data/logo.png", use_container_width=True)
         
-        st.title("🌍 Dashboard Controls")
+        st.title("Dashboard Controls")
         st.markdown("---")
         
         st.markdown("""
-        ### 🎯 About This Dashboard
+        ### About This Dashboard
         This dashboard analyzes the critical connection between 
         **food price inflation** and **poverty risk**, aligned with:
         
@@ -218,12 +225,62 @@ def main():
         st.markdown("---")
         st.markdown("### 📊 Data Sources")
         st.info(f"""
+        **Dataset Overview**
         - **{len(country)} Countries** analyzed
         - **{food['year-recorded'].nunique()} Years** of food price data
         - **{food['comm-purchased'].nunique()} Commodities** tracked
         - **{len(food):,} Price Records**
+        - **{len(region)} Regions** with population demographics
+        - **{income.shape[1]-1} Years** of income data ({income.columns[1]} to {income.columns[-1]})
+        """)
+                
+        
+        st.markdown("---")
+        st.markdown("## Original Data Sources")
+        
+        # Food Prices Data
+        st.markdown("""
+        **Food Prices Database**  
+        [Global Food Prices Dataset - Kaggle](https://www.kaggle.com/datasets/salehahmedrony/global-food-prices/)  
+        *World Food Programme (WFP) food price monitoring*
         """)
         
+        # Population Data
+        st.markdown("""
+        **Population & Demographics**  
+        [Worldometer Population Statistics](https://www.worldometers.info/world-population/)  
+        *Real-time world population data and demographics*
+        """)
+        
+        # Income Data
+        st.markdown("""
+        **Income & Economic Indicators**  
+        [World Bank Open Data - World Development Indicators](https://databank.worldbank.org/source/world-development-indicators/Series/PA.NUS.PPP#)  
+        *Purchasing Power Parity and economic data*
+        """)
+        
+        st.markdown("---")
+        st.markdown("### 👥 Team Members")
+        
+        # Team Member 1
+        st.markdown("""
+        **🧑‍💻 Uzair Hussain**  
+            [See Profile](https://linkedin.com/in/uzairhussain1)            
+        """)
+        
+        # Team Member 2
+        st.markdown("""
+        **👩‍💻 Abdul Lahad**  
+            [See Profile](https://linkedin.com/in/member2-profile)
+        """)
+        
+        # Team Member 3
+        st.markdown("""
+        **🧑‍💼 Syed Bilal Majid**  
+            [See Profile](https://linkedin.com/in/member3-profile)
+        """)
+        
+
         st.markdown("---")
         st.markdown("""
         <div style='text-align: center; padding: 10px; background-color: #000000; border-radius: 5px;'>
@@ -233,7 +290,7 @@ def main():
         """, unsafe_allow_html=True)
     
     # ==================== HEADER ====================
-    st.title("🌍 Inflation to Poverty Analysis Dashboard")
+    st.title("🌍 Sustainly - Inflation to Poverty Analysis Dashboard")
     st.markdown("### *Bridging the Gap Between Food Security and Economic Stability*")
     st.markdown("---")
     
@@ -372,27 +429,30 @@ def main():
             
             fig = go.Figure()
             fig.add_trace(go.Bar(
-                name='Urban Population',
-                y=df_sorted['Region'],
-                x=df_sorted['Urban_Pop']/1e6,
-                orientation='h',
-                marker=dict(color='#00689D')
-            ))
-            fig.add_trace(go.Bar(
                 name='Rural Population',
                 y=df_sorted['Region'],
                 x=df_sorted['Rural_Pop']/1e6,
                 orientation='h',
                 marker=dict(color='#4C9F38')
             ))
+            fig.add_trace(go.Bar(
+                name='Urban Population',
+                y=df_sorted['Region'],
+                x=df_sorted['Urban_Pop']/1e6,
+                orientation='h',
+                marker=dict(color='#00689D')
+            ))
             
             fig.update_layout(
                 barmode='stack',
                 title='Urban vs Rural Population by Region (Millions)',
                 xaxis_title='Population (Millions)',
-                height=400
+                height=400,
+                legend=dict(x=0.7, y=0.95),  # Position legend better
+                showlegend=True
             )
             st.plotly_chart(fig, use_container_width=True)
+            
         
         with col2:
             # Fertility vs Median Age
@@ -747,7 +807,7 @@ def main():
         st.markdown("""
         <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                     padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;'>
-            <h3>🎯 Understanding the Connection</h3>
+            <h3>Understanding the Connection</h3>
             <p>This analysis combines <b>food price inflation</b>, <b>demographic pressure</b>, 
             and <b>population density</b> to identify countries at highest risk of poverty escalation.</p>
         </div>
@@ -843,7 +903,7 @@ def main():
         st.markdown("---")
         
         # Scatter plot analysis
-        st.subheader("🔍 Multi-Dimensional Risk Analysis")
+        st.subheader("Multi-Dimensional Risk Analysis")
         
         col1, col2 = st.columns(2)
         
@@ -882,7 +942,7 @@ def main():
         st.markdown("---")
         
         # Purchasing Power Analysis
-        st.subheader("💵 Purchasing Power vs Food Prices")
+        st.subheader("Purchasing Power vs Food Prices")
         
         # Prepare income-food merged data
         income_clean = income.copy()
@@ -924,20 +984,23 @@ def main():
                 )
                 fig.update_layout(yaxis={'categoryorder':'total ascending'}, height=400, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
-            
+
             with col2:
-                st.markdown("#### 😰 Lowest Purchasing Power")
-                bottom_pp = merged_pp.nsmallest(10, 'Purchasing_Power')
+                st.markdown("#### 📈 Highest Food Price Inflation")
+                # Show countries with highest food price inflation instead
+                high_inflation = merged_df.nlargest(10, 'avg_food_inflation')
+                
                 fig = px.bar(
-                    bottom_pp,
+                    high_inflation,
                     y='Country',
-                    x='Purchasing_Power',
+                    x='avg_food_inflation',
                     orientation='h',
-                    color='Purchasing_Power',
-                    color_continuous_scale='Reds_r',
-                    labels={'Purchasing_Power': 'Purchasing Power Index'}
+                    color='avg_food_inflation',
+                    color_continuous_scale='Reds',
+                    labels={'avg_food_inflation': 'Average Food Inflation (%)'},
+                    title='Countries with Highest Food Price Inflation'
                 )
-                fig.update_layout(yaxis={'categoryorder':'total descending'}, height=400, showlegend=False)
+                fig.update_layout(yaxis={'categoryorder':'total ascending'}, height=400, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("Insufficient data for purchasing power analysis")
@@ -964,7 +1027,7 @@ def main():
             
             if common_countries:
                 selected_country_deep = st.selectbox(
-                    "🌍 Select Country for Analysis",
+                    "Select Country for Analysis",
                     [c.title() for c in common_countries],
                     key='deep_dive_country'
                 )
