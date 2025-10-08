@@ -223,9 +223,8 @@ def main():
         """)
         
         st.markdown("---")
-        st.markdown("### 📊 Data Sources")
+        st.markdown("### 📊 Data Overview")
         st.info(f"""
-        **Dataset Overview**
         - **{len(country)} Countries** analyzed
         - **{food['year-recorded'].nunique()} Years** of food price data
         - **{food['comm-purchased'].nunique()} Commodities** tracked
@@ -236,7 +235,7 @@ def main():
                 
         
         st.markdown("---")
-        st.markdown("## Original Data Sources")
+        st.markdown("### 📈 Data Sources")
         
         # Food Prices Data
         st.markdown("""
