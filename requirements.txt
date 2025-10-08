@@ -5,3 +5,5 @@ matplotlib
 plotly
 seaborn
 openpyxl
+boto3
+python-dotenv
