@@ -536,8 +536,9 @@ def main():
         
         # Display table
         with st.expander("📋 View Detailed Life Expectancy Data"):
+            topp_life = life.nlargest(10, 'Life Expectancy Combined')
             st.dataframe(
-                top_life[['Country', 'Life Expectancy Combined', 'Males Life Expectancy', 
+                topp_life[['Country', 'Life Expectancy Combined', 'Males Life Expectancy', 
                          'Females Life Expectancy', 'Gender_Gap']].style.format({
                     'Life Expectancy Combined': '{:.1f}',
                     'Males Life Expectancy': '{:.1f}',
